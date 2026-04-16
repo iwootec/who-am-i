@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+    <title>내 위치 — 관광안내도</title>
+    <style>
+        html, body { margin: 0; height: 100%; background: #111; color: #eee; font-family: system-ui, sans-serif; }
+        #status { position: fixed; top: 0; left: 0; right: 0; padding: 8px 12px; background: rgba(0,0,0,.6); font-size: 13px; z-index: 10; }
+        .wrap { position: relative; display: inline-block; }
+        img { display: block; max-width: 100vw; }
+        .marker, .landmark {
+            position: absolute; transform: translate(-50%, -50%); pointer-events: none;
+        }
+        .marker {
+            width: 22px; height: 22px; border-radius: 50%;
+            background: #39f; border: 3px solid #fff;
+            box-shadow: 0 0 0 6px rgba(51,153,255,.35), 0 0 12px rgba(0,0,0,.6);
+            animation: pulse 1.6s ease-out infinite;
+        }
+        .landmark {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #f66; border: 2px solid #fff; opacity: .7;
+        }
+        .landmark span {
+            position: absolute; left: 12px; top: -4px; white-space: nowrap;
+            font-size: 11px; color: #fff; text-shadow: 0 0 3px #000;
+        }
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(51,153,255,.6); }
+            100% { box-shadow: 0 0 0 18px rgba(51,153,255,0); }
+        }
+    </style>
+</head>
+<body>
+<div id="status">초기화 중…</div>
+<div class="wrap">
+    <img id="map" src="map.jpg" alt="map">
+</div>
+<script type="module">
+import { solveAffine } from "./affine.js";
+
+const status = document.getElementById("status");
+const img = document.getElementById("map");
+const wrap = document.querySelector(".wrap");
+const setStatus = msg => (status.textContent = msg);
+
+const placeAt = (el, px, py) => {
+    el.style.left = `${(px / img.naturalWidth) * 100}%`;
+    el.style.top  = `${(py / img.naturalHeight) * 100}%`;
+};
+
+const run = async () => {
+    const res = await fetch("./calibration.json", { cache: "no-store" });
+    const cal = await res.json();
+    const uncalibrated = cal.landmarks.some(l => l.px[0] === 0 && l.px[1] === 0);
+    if (uncalibrated) {
+        setStatus("calibration.json 이 비어 있습니다. calibrate.html 로 보정하세요.");
+        return;
+    }
+
+    await new Promise(r => (img.complete ? r() : img.addEventListener("load", r)));
+
+    const toPx = solveAffine(cal.landmarks);
+
+    for (const l of cal.landmarks) {
+        const el = document.createElement("div");
+        el.className = "landmark";
+        el.innerHTML = `<span>${l.name}</span>`;
+        placeAt(el, l.px[0], l.px[1]);
+        wrap.appendChild(el);
+    }
+
+    const me = document.createElement("div");
+    me.className = "marker";
+    me.style.display = "none";
+    wrap.appendChild(me);
+
+    if (!("geolocation" in navigator)) {
+        setStatus("이 브라우저는 Geolocation 을 지원하지 않습니다.");
+        return;
+    }
+
+    navigator.geolocation.watchPosition(
+        pos => {
+            const { latitude, longitude, accuracy } = pos.coords;
+            const [px, py] = toPx(latitude, longitude);
+            placeAt(me, px, py);
+            me.style.display = "block";
+            setStatus(`내 위치: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (±${Math.round(accuracy)}m)`);
+        },
+        err => setStatus(`위치 오류: ${err.message}`),
+        { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+    );
+};
+
+run().catch(e => setStatus(`오류: ${e.message}`));
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>지도 보정</title>
+    <style>
+        body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee; }
+        header { padding: 12px 16px; background: #222; position: sticky; top: 0; z-index: 10; }
+        header h1 { margin: 0 0 6px; font-size: 16px; }
+        header p { margin: 0; font-size: 13px; color: #9cf; }
+        .wrap { position: relative; display: inline-block; }
+        img { display: block; max-width: 100%; cursor: crosshair; }
+        .pin { position: absolute; transform: translate(-50%, -100%); pointer-events: none; font-size: 12px; color: #fff; text-shadow: 0 0 3px #000; }
+        .pin::before { content: ""; display: block; width: 14px; height: 14px; margin: 0 auto; background: #f33; border: 2px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); }
+        pre { margin: 12px 16px; padding: 12px; background: #000; color: #9f9; font-size: 12px; overflow: auto; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>지도 보정 — 랜드마크 위치를 순서대로 클릭하세요</h1>
+    <p id="status"></p>
+</header>
+<div class="wrap">
+    <img id="map" src="map.jpg" alt="map">
+</div>
+<pre id="out">아직 보정 전입니다.</pre>
+<script type="module">
+const landmarks = [
+    { name: "탈춤공연장", lat: 36.5647000, lng: 128.7335000 },
+    { name: "안동체육관", lat: 36.564319,  lng: 128.739433  },
+    { name: "홈플러스",   lat: 36.5625931, lng: 128.7303102 }
+];
+const img = document.getElementById("map");
+const wrap = document.querySelector(".wrap");
+const status = document.getElementById("status");
+const out = document.getElementById("out");
+let idx = 0;
+
+const render = () => {
+    status.textContent = idx < landmarks.length
+        ? `${idx + 1}/${landmarks.length} — "${landmarks[idx].name}" 위치를 클릭`
+        : "완료! 아래 JSON 을 calibration.json 에 붙여넣으세요.";
+};
+
+img.addEventListener("click", e => {
+    if (idx >= landmarks.length) return;
+    const rect = img.getBoundingClientRect();
+    const sx = img.naturalWidth / rect.width;
+    const sy = img.naturalHeight / rect.height;
+    const px = Math.round((e.clientX - rect.left) * sx);
+    const py = Math.round((e.clientY - rect.top) * sy);
+    landmarks[idx].px = [px, py];
+
+    const pin = document.createElement("div");
+    pin.className = "pin";
+    pin.style.left = `${((px / img.naturalWidth) * 100).toFixed(3)}%`;
+    pin.style.top  = `${((py / img.naturalHeight) * 100).toFixed(3)}%`;
+    pin.innerHTML = `<span>${landmarks[idx].name}</span>`;
+    wrap.appendChild(pin);
+
+    idx++;
+    render();
+    if (idx === landmarks.length) {
+        out.textContent = JSON.stringify({ image: "map.jpg", landmarks }, null, 4);
+    }
+});
+
+render();
+</script>
+</body>
+</html>
